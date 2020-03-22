@@ -17,7 +17,7 @@ enum Cli {
     Add {
         #[structopt()]
         name: String,
-        #[structopt(long, env = "HYLLA_WORKSPACE", parse(from_os_str))]
+        #[structopt(long, env = "PILE_WORKSPACE", parse(from_os_str))]
         workspace: PathBuf,
         /// Clone with git
         #[structopt(long, short)]
@@ -40,13 +40,13 @@ enum Cli {
         /// Filter by tag name
         #[structopt(long, short)]
         tag: Option<String>,
-        #[structopt(long, env = "HYLLA_WORKSPACE", parse(from_os_str))]
+        #[structopt(long, env = "PILE_WORKSPACE", parse(from_os_str))]
         workspace: PathBuf
     },
 
     /// Open the workspace in a file manager
     Workspace {
-        #[structopt(long, env = "HYLLA_WORKSPACE", parse(from_os_str))]
+        #[structopt(long, env = "PILE_WORKSPACE", parse(from_os_str))]
         workspace: PathBuf
     },
 
@@ -56,7 +56,7 @@ enum Cli {
             value_name="PROJECT NAME"
         )]  
         name: String,
-        #[structopt(long, env = "HYLLA_WORKSPACE", parse(from_os_str))]
+        #[structopt(long, env = "PILE_WORKSPACE", parse(from_os_str))]
         workspace: PathBuf,
         /// Execute a command in the project path
         #[structopt(
@@ -77,7 +77,7 @@ enum Cli {
             value_name="PROJECT NAME"
         )]  
         name: String, 
-        #[structopt(long, env = "HYLLA_WORKSPACE", parse(from_os_str))]
+        #[structopt(long, env = "PILE_WORKSPACE", parse(from_os_str))]
         workspace: PathBuf,
     },
 
@@ -87,7 +87,7 @@ enum Cli {
             value_name="PROJECT NAME"
         )]  
         name: String, 
-        #[structopt(long, env = "HYLLA_WORKSPACE", parse(from_os_str))]
+        #[structopt(long, env = "PILE_WORKSPACE", parse(from_os_str))]
         workspace: PathBuf,
     }
 }

@@ -12,7 +12,8 @@ use open;
 // * migrate
 // * edit
 // * keep track from where things are git cloned
-//      + create an install command
+//      + create a fetch command
+// * better errors, when a conflicting dir exists for instance
 
 /// Enum of all the possible Errors
 pub enum Errors {
@@ -140,7 +141,7 @@ pub fn open_project(name: String, workspace: PathBuf) -> Result<(), Errors> {
 }
 
 /// Gets a connection to the database
-/// If a file named "hyllars_test.db" does not
+/// If a file named "pile.db" does not
 /// exist in the workspace directory, such a file will be created.
 /// 
 /// # Example:
@@ -150,7 +151,7 @@ pub fn open_project(name: String, workspace: PathBuf) -> Result<(), Errors> {
 /// ``` 
 pub fn get_connection(workspace: &PathBuf) -> Result<Connection, rusqlite::Error> {
     let mut filepath = workspace.clone();
-    filepath.push("hyllars_test.db");
+    filepath.push("pile.db");
     let conn = Connection::open(filepath)?;
     conn.execute(
         "create table if not exists projects (
