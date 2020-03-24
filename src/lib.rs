@@ -105,12 +105,12 @@ pub fn remove_project(workspace: PathBuf, name: String) -> Result<(), Errors> {
     println!("Note: the actual directory has not been removed");
     Ok(())
 }
-
+/// This should def be changed.
 /// Returns the path to a specific project.
 pub fn get_project_path(name: String, workspace: &PathBuf) -> Result<PathBuf, Errors> {
-    let conn = get_connection(workspace)?;
+    let conn = get_connection(&workspace)?;
     let project = Project::get_from_db_by_name(&name, &conn)?;
-    Ok(project.path)
+    Ok(project.get_path(&workspace))
 }
 
 /// Prints the path to a given project.
@@ -157,7 +157,6 @@ pub fn get_connection(workspace: &PathBuf) -> Result<Connection, rusqlite::Error
         "create table if not exists projects (
              id integer primary key,
              name text not null unique,
-             path text not null unique,
              tags text
          )",
         NO_PARAMS,
@@ -175,20 +174,20 @@ pub fn add_project(
     readme: bool
     ) -> Result<(), Errors> {
 
-    let project = Project::new(name, tags, &workspace);
+    let project = Project::new(name, tags);
     let conn = get_connection(&workspace).expect("Failed to connect to the database.");
 
     if Project::name_taken(&project.name, &conn) {
         return Err(Errors::ProjectNameTaken);
     }
 
-    project.create_directory()?;
+    project.create_directory(&workspace)?;
     project
         .add_to_db(&conn)
         .expect("Failed to add the project to the database.");
 
     if readme {
-        let mut readme_path = project.path.clone();
+        let mut readme_path = project.get_path(&workspace).clone();
         readme_path.push("README.md");
 
         let mut file = fs::File::create(&readme_path)?;
@@ -200,34 +199,36 @@ pub fn add_project(
     if clone.is_some() {
          let clone_url = clone.unwrap();
          Command::new("git")
-             .current_dir(&project.path)
+             .current_dir(&project.get_path(&workspace))
              .args(vec!["clone", &clone_url, "."])
              .output()?;
     }
     
     println!("Project created");
-    println!("{}", project.path.to_string_lossy());
+    println!("{}", project.get_path(&workspace).to_string_lossy());
     Ok(())
 }  
 
 #[derive(Debug)]
 pub struct Project {
     pub name: String,
-    pub path: PathBuf,
     pub tags: Vec<String>,
 }
 
 impl Project {
     /// Creates a new Project
-    pub fn new(name: String, tags: Vec<String>, workspace: &PathBuf) -> Self{
+    pub fn new(name: String, tags: Vec<String>) -> Self{
         let cleaned_name = name.trim().replace(" ", "-");
-        let mut generated_path = workspace.clone();
-        generated_path.push(&cleaned_name);
         Project {
             name: cleaned_name,
             tags: tags,
-            path: generated_path,
         }
+    }
+
+    pub fn get_path(&self, workspace: &PathBuf) -> PathBuf {
+        let mut path = workspace.clone();
+        path.push(&self.name);
+        path
     }
 
     /// Checks if a project name is already in use
@@ -241,14 +242,12 @@ impl Project {
     /// Returns a single Project based on the provided name
     /// **TODO:** this function should return a Result instead of panic if it fails.
     pub fn get_from_db_by_name(name:&String, conn: &Connection) -> Result<Project, Errors> {
-        let mut stmt = conn.prepare("SELECT path, tags FROM projects WHERE name = ?1")
+        let mut stmt = conn.prepare("SELECT tags FROM projects WHERE name = ?1")
             .unwrap();
         let mut db_output = stmt.query_map(params![name], |row| {
-            let path_string: String = row.get(0)?;
-            let tags_string: String = row.get(1)?;
+            let tags_string: String = row.get(0)?;
             Ok(Project {
                 name: name.clone(),
-                path: PathBuf::from(path_string),
                 tags: tags_string
                     .split(",")
                     .map(|tag| tag.to_string())
@@ -299,7 +298,7 @@ impl Project {
             (Some(name), Some(tag)) => 
                 (
                     conn.prepare(
-                        "SELECT path, tags, name
+                        "SELECT tags, name
                         FROM projects
                         WHERE name LIKE ?1
                         AND tags LIKE ?2
@@ -312,7 +311,7 @@ impl Project {
             (Some(name), None) => 
                 (
                     conn.prepare(
-                        "SELECT path, tags, name
+                        "SELECT tags, name
                         FROM projects
                         WHERE name LIKE ?1
                         ORDER BY name COLLATE NOCASE ASC"
@@ -325,7 +324,7 @@ impl Project {
             (None, Some(tag)) => 
                 (
                     conn.prepare(
-                        "SELECT path, tags, name
+                        "SELECT tags, name
                         FROM projects
                         WHERE tags LIKE ?1
                         ORDER BY name COLLATE NOCASE ASC"
@@ -338,7 +337,7 @@ impl Project {
             _ => 
                 (
                     conn.prepare(
-                        "SELECT path, tags, name
+                        "SELECT tags, name
                         FROM projects
                         ORDER BY name COLLATE NOCASE ASC"
                     ).unwrap(),
@@ -348,11 +347,9 @@ impl Project {
 
         // This closure turns a rusqlite row into an actual Project struct,
         let from_row_to_project = |row: &rusqlite::Row| -> rusqlite::Result<Project>{
-            let path_string: String = row.get(0)?;
-            let tags_string: String = row.get(1)?;
+            let tags_string: String = row.get(0)?;
             Ok(Project {
-                name: row.get(2)?,
-                path: PathBuf::from(path_string),
+                name: row.get(1)?,
                 tags: tags_string
                     .split(",")
                     .map(|tag| tag.to_string())
@@ -394,15 +391,15 @@ impl Project {
     /// Adds the project itself to a database using the given Connection.
     pub fn add_to_db(&self, conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute(
-            "INSERT INTO projects (name, path, tags) VALUES (?1, ?2, ?3)",
-            params![self.name, self.path.to_string_lossy(), self.tags.join(",")]
+            "INSERT INTO projects (name, tags) VALUES (?1, ?2)",
+            params![self.name, self.tags.join(",")]
         )?;
         Ok(())
     }
 
     /// Create a directory for the project.
-    pub fn create_directory(&self) -> std::io::Result<()>{
-        fs::create_dir(&self.path)?;
+    pub fn create_directory(&self, workspace: &PathBuf) -> std::io::Result<()>{
+        fs::create_dir(&self.get_path(&workspace))?;
         Ok(())
     }
 }
