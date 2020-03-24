@@ -114,7 +114,12 @@ pub fn get_project_path(name: String, workspace: &PathBuf) -> Result<PathBuf, Er
 }
 
 /// Prints the path to a given project.
-pub fn path_command(name: String, workspace: PathBuf, execute: Option<Vec<String>>) -> Result<(), Errors> {
+pub fn path_command(
+    name: String,
+    workspace: PathBuf,
+    execute: Option<Vec<String>>
+    ) -> Result<(), Errors> {
+    
     let path = get_project_path(name, &workspace)?;
     println!("{}", path.to_string_lossy());
 
@@ -137,6 +142,36 @@ pub fn path_command(name: String, workspace: PathBuf, execute: Option<Vec<String
 pub fn open_project(name: String, workspace: PathBuf) -> Result<(), Errors> {
     let path = get_project_path(name, &workspace)?;
     open::that(path)?;
+    Ok(())
+}
+
+pub fn edit(
+    name: String,
+    new_name: Option<String>,
+    new_tags: Option<Vec<String>>,
+    workspace: PathBuf
+    ) -> Result<(), Errors> {
+    
+    let conn = get_connection(&workspace)?;
+    let project = Project::get_from_db_by_name(&name, &conn)?;
+
+    match new_name {
+        Some(name) => {
+            let returned_name = project.edit_name(&name, &conn, &workspace)?;
+            println!("The name has been changed to {}", returned_name);
+        },
+        None => ()
+    }
+
+    match new_tags {
+        Some(tags) => {
+            project.edit_tags(&tags, &conn)?;
+            println!("The tags has been changed to {}", tags.join(", "));
+        }
+        None => ()
+    }
+
+    //project.edit_tags(new_tags, &conn)?;
     Ok(())
 }
 
@@ -175,16 +210,14 @@ pub fn add_project(
     ) -> Result<(), Errors> {
 
     let project = Project::new(name, tags);
-    let conn = get_connection(&workspace).expect("Failed to connect to the database.");
+    let conn = get_connection(&workspace)?;
 
     if Project::name_taken(&project.name, &conn) {
         return Err(Errors::ProjectNameTaken);
     }
 
     project.create_directory(&workspace)?;
-    project
-        .add_to_db(&conn)
-        .expect("Failed to add the project to the database.");
+    project.add_to_db(&conn)?;
 
     if readme {
         let mut readme_path = project.get_path(&workspace).clone();
@@ -272,6 +305,37 @@ impl Project {
         }
     }
 
+    /// Edits the name of a project, the cleaned new name is returned on Ok()
+    pub fn edit_name(&self, new_name: &str, conn:&Connection, workspace: &PathBuf) -> Result<String, Errors>{
+        let cleaned_name = new_name.trim().replace(" ", "-");
+
+        let mut stmt = conn.prepare(
+            "UPDATE projects SET name = ?1 WHERE name = ?2"
+        ).unwrap();
+        stmt.execute(params![cleaned_name, self.name])?;
+
+        let mut new_path = workspace.clone();
+        new_path.push(&cleaned_name);
+
+        fs::rename(self.get_path(&workspace), &new_path)?;
+        Ok(cleaned_name)
+    }
+
+    pub fn edit_tags(
+        &self,
+        new_tags: &Vec<String>,
+        conn:&Connection,
+    ) -> Result<(), Errors> {
+
+        let mut stmt = conn.prepare(
+            "UPDATE projects SET tags = ?1 WHERE name = ?2"
+        ).unwrap();
+
+        stmt.execute(params![&new_tags.join(","), self.name])?;
+
+        Ok(())
+    }
+
     /// Get multiple projects from the database.
     /// The name_query and tag_query is used to filter out results
     /// based on project name or a subject tag name.
@@ -283,8 +347,8 @@ impl Project {
         conn: &Connection,
         name_query: Option<String>,
         tag_query: Option<String>
-        ) -> Result<Vec<Project>, Errors>{
-
+        ) -> Result<Vec<Project>, Errors> {
+        
         enum FilterBy {
             NameAndTag {name: String, tag: String},
             Name{name: String},

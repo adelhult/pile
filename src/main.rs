@@ -69,7 +69,25 @@ enum Cli {
     },
 
     /// Edit the information about a project
-    Edit,
+    Edit {
+        #[structopt(
+            value_name="PROJECT NAME"
+        )]
+        name: String,
+        #[structopt(
+            long,
+            value_name="NEW NAME"
+        )]
+        new_name: Option<String>,
+        #[structopt(
+            long,
+            multiple=true,
+            value_name="NEW TAGS"
+        )]
+        new_tags: Option<Vec<String>>,
+        #[structopt(long, env = "PILE_WORKSPACE", parse(from_os_str))]
+        workspace:PathBuf
+    },
 
     /// Open a project in a file manager
     Open {
@@ -96,7 +114,12 @@ fn main() {
     let user_input = Cli::from_args();
     let result = match user_input {
         Cli::Doc        => pile::open_documentation(),
-        Cli::Edit       => Err(pile::Errors::NotImplemented),
+        Cli::Edit {
+            name,
+            new_name,
+            new_tags,
+            workspace
+        }               => pile::edit(name, new_name, new_tags, workspace),
         Cli::Open {
             name,
             workspace
