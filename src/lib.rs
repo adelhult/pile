@@ -152,7 +152,7 @@ pub fn edit(
     ) -> Result<(), Errors> {
     
     let conn = get_connection(&workspace)?;
-    let project = Project::get_from_db_by_name(&name, &conn)?;
+    let mut project = Project::get_from_db_by_name(&name, &conn)?;
 
     match new_name {
         Some(name) => {
@@ -305,7 +305,7 @@ impl Project {
     }
 
     /// Edits the name of a project, the cleaned new name is returned on Ok()
-    pub fn edit_name(&self, new_name: &str, conn:&Connection, workspace: &PathBuf) -> Result<String, Errors>{
+    pub fn edit_name(&mut self, new_name: &str, conn:&Connection, workspace: &PathBuf) -> Result<String, Errors>{
         let cleaned_name = new_name.trim().replace(" ", "-");
 
         let mut stmt = conn.prepare(
@@ -317,11 +317,14 @@ impl Project {
         new_path.push(&cleaned_name);
 
         fs::rename(self.get_path(&workspace), &new_path)?;
+
+        self.name = cleaned_name.clone();
+
         Ok(cleaned_name)
     }
 
     pub fn edit_tags(
-        &self,
+        &mut self,
         new_tags: &Vec<String>,
         conn:&Connection,
     ) -> Result<(), Errors> {
@@ -332,6 +335,7 @@ impl Project {
 
         stmt.execute(params![&new_tags.join(","), self.name])?;
 
+        self.tags = new_tags.clone();
         Ok(())
     }
 
