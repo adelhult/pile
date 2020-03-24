@@ -10,7 +10,6 @@ use open;
 
 // Todo:
 // * migrate
-// * edit
 // * keep track from where things are git cloned
 //      + create a fetch command
 // * better errors, when a conflicting dir exists for instance
