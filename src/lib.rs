@@ -2,6 +2,8 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
+use clipboard::ClipboardProvider;
+use clipboard::ClipboardContext;
 use rusqlite::{Connection, params};
 use rusqlite::NO_PARAMS;
 use prettytable::{Table, Row, Cell};
@@ -116,12 +118,18 @@ pub fn get_project_path(name: String, workspace: &PathBuf) -> Result<PathBuf, Er
 pub fn path_command(
     name: String,
     workspace: PathBuf,
+    clipboard: bool,
     execute: Option<Vec<String>>
     ) -> Result<(), Errors> {
-    
     let path = get_project_path(name, &workspace)?;
-    println!("{}", path.to_string_lossy());
+    let path_string = path.to_string_lossy();
+    println!("{}", path_string);
 
+    if clipboard {
+        let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+        ctx.set_contents(path_string.to_owned().to_string()).unwrap();
+        println!("The path has been copied to the clipboard.");
+    }
     // If the user specified a command, execute it.
     match execute {
         None => (),

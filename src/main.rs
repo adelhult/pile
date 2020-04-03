@@ -62,6 +62,12 @@ enum Cli {
         #[structopt(
             long,
             short,
+        )]
+        clipboard: bool,
+        /// Execute a command in the project path
+        #[structopt(
+            long,
+            short,
             multiple=true,
             value_name="COMMAND ARGS"
         )]
@@ -127,8 +133,9 @@ fn main() {
         Cli::Path {
             name,
             workspace,
+            clipboard,
             execute
-        }               => pile::path_command(name, workspace, execute),
+        }               => pile::path_command(name, workspace, clipboard, execute),
         Cli::List {
             workspace,
             name,
