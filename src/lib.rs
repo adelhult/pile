@@ -72,7 +72,7 @@ pub fn print_list(
     let conn = get_connection(&workspace)?;
     let projects = Project::fetch_from_db(&conn, name, tag)?;
 
-    if projects.len() < 1 {
+    if projects.is_empty(){
         println!("No projects where found :(");
         return Ok(());
     }
@@ -131,17 +131,15 @@ pub fn path_command(
         println!("The path has been copied to the clipboard.");
     }
     // If the user specified a command, execute it.
-    match execute {
-        None => (),
-        Some(args) =>  {
-            if args.len() > 0 {
-                Command::new(&args[0])
-                    .current_dir(&path)
-                    .args(&args[1..])
-                    .spawn()?;
-            }
+    if let Some(args) = execute{
+        if !args.is_empty() {
+            Command::new(&args[0])
+                .current_dir(&path)
+                .args(&args[1..])
+                .spawn()?;
         }
     }
+ 
     Ok(())
 }
 
@@ -162,23 +160,16 @@ pub fn edit(
     let conn = get_connection(&workspace)?;
     let mut project = Project::get_from_db_by_name(&name, &conn)?;
 
-    match new_name {
-        Some(name) => {
-            let returned_name = project.edit_name(&name, &conn, &workspace)?;
-            println!("The name has been changed to {}", returned_name);
-        },
-        None => ()
+    if let Some(name) = new_name {
+        let returned_name = project.edit_name(&name, &conn, &workspace)?;
+        println!("The name has been changed to {}", returned_name);
     }
 
-    match new_tags {
-        Some(tags) => {
-            project.edit_tags(&tags, &conn)?;
-            println!("The tags has been changed to {}", tags.join(", "));
-        }
-        None => ()
+    if let Some(tags) = new_tags {
+        project.edit_tags(&tags, &conn)?;
+        println!("The tags has been changed to {}", tags.join(", "));
     }
 
-    //project.edit_tags(new_tags, &conn)?;
     Ok(())
 }
 
@@ -227,7 +218,7 @@ pub fn add_project(
     project.add_to_db(&conn)?;
 
     if readme {
-        let mut readme_path = project.get_path(&workspace).clone();
+        let mut readme_path = project.get_path(&workspace);
         readme_path.push("README.md");
 
         let mut file = fs::File::create(&readme_path)?;
@@ -236,9 +227,8 @@ pub fn add_project(
         file.write_all(file_content.as_bytes())?;
     }
     
-    if clone.is_some() {
-         let clone_url = clone.unwrap();
-         Command::new("git")
+    if let Some(clone_url) = clone {
+        Command::new("git")
              .current_dir(&project.get_path(&workspace))
              .args(vec!["clone", &clone_url, "."])
              .output()?;
@@ -261,7 +251,7 @@ impl Project {
         let cleaned_name = name.trim().replace(" ", "-");
         Project {
             name: cleaned_name,
-            tags: tags,
+            tags
         }
     }
 
@@ -273,23 +263,22 @@ impl Project {
 
     /// Checks if a project name is already in use
     /// TODO: Check if a conflicting directory exists.
-    pub fn name_taken(name: &String, conn: &Connection) -> bool {
+    pub fn name_taken(name: &str, conn: &Connection) -> bool {
         let mut stmt = conn.prepare("SELECT id FROM projects WHERE name = ?1").unwrap();
-        let answer = stmt.exists(params![name]).expect("Could not SELECT from database");
-        answer
+        stmt.exists(params![name]).expect("Could not SELECT from database")
     }
     
     /// Returns a single Project based on the provided name
     /// **TODO:** this function should return a Result instead of panic if it fails.
-    pub fn get_from_db_by_name(name:&String, conn: &Connection) -> Result<Project, Errors> {
+    pub fn get_from_db_by_name(name:&str, conn: &Connection) -> Result<Project, Errors> {
         let mut stmt = conn.prepare("SELECT tags FROM projects WHERE name = ?1")
             .unwrap();
         let mut db_output = stmt.query_map(params![name], |row| {
             let tags_string: String = row.get(0)?;
             Ok(Project {
-                name: name.clone(),
+                name: String::from(name),
                 tags: tags_string
-                    .split(",")
+                    .split(',')
                     .map(|tag| tag.to_string())
                     .filter(|tag| tag != "")
                     .collect()
@@ -304,7 +293,7 @@ impl Project {
 
     /// Remove a project from the database (based on its name)
     /// **This method is not completed yet.**
-    pub fn remove_from_db_by_name(name: &String, conn: &Connection) -> Result<(), Errors>{
+    pub fn remove_from_db_by_name(name: &str, conn: &Connection) -> Result<(), Errors>{
         let mut stmt = conn.prepare("DELETE FROM projects WHERE name = ?1").unwrap();
         match stmt.execute(params![name]) {
             Ok(_) => Ok(()),
@@ -333,7 +322,7 @@ impl Project {
 
     pub fn edit_tags(
         &mut self,
-        new_tags: &Vec<String>,
+        new_tags: &[String],
         conn:&Connection,
     ) -> Result<(), Errors> {
 
@@ -343,7 +332,7 @@ impl Project {
 
         stmt.execute(params![&new_tags.join(","), self.name])?;
 
-        self.tags = new_tags.clone();
+        self.tags = new_tags.to_owned();
         Ok(())
     }
 
@@ -426,7 +415,7 @@ impl Project {
             Ok(Project {
                 name: row.get(1)?,
                 tags: tags_string
-                    .split(",")
+                    .split(',')
                     .map(|tag| tag.to_string())
                     .filter(|tag| tag != "")
                     .collect()
