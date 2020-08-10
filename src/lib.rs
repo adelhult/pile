@@ -1,4 +1,6 @@
 use std::fs;
+use std::io;
+use std::process::Output;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
@@ -133,14 +135,34 @@ pub fn path_command(
     // If the user specified a command, execute it.
     if let Some(args) = execute{
         if !args.is_empty() {
-            Command::new(&args[0])
-                .current_dir(&path)
-                .args(&args[1..])
-                .spawn()?;
+            let output = execute_command(args, &path);
+            if output.is_err() {
+                println!("Failed to execute the command.");
+            } else if let Ok(value) = output {
+                io::stdout().write_all(&value.stdout).unwrap();
+                io::stderr().write_all(&value.stderr).unwrap();
+            }
         }
     }
  
     Ok(())
+}
+
+/// Helper function that will execute one or more commands
+fn execute_command(args: Vec<String>, path: &PathBuf) -> Result<Output, io::Error> {
+    if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .current_dir(path)
+            .arg("/C")
+            .args(&args)
+            .output()
+    } else {
+        Command::new("sh")
+            .current_dir(path)
+            .arg("-c")
+            .args(&args)
+            .output()
+    }
 }
 
 /// Opens the path to a project in a file browser.
